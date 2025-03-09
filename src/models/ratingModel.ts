@@ -1,9 +1,9 @@
-import { ERROR_MESSAGES } from '@/app/utils/errorMessages';
+import { ERROR_MESSAGES } from '@/utils/errorMessages';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { Rating } from 'hybrid-types/DBTypes';
-import promisePool from '@/app/lib/db';
+import promisePool from '@/lib/db';
 import { MessageResponse } from 'hybrid-types/MessageTypes';
-import CustomError from '@/app/classes/CustomError';
+import CustomError from '@/classes/CustomError';
 
 // Request a list of ratings
 const fetchAllRatings = async (): Promise<Rating[]> => {

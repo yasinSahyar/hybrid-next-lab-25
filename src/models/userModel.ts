@@ -1,8 +1,8 @@
-import promisePool from '@/app/lib/db';
+import promisePool from '@/lib/db';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { UserWithLevel, User, UserWithNoPassword } from 'hybrid-types/DBTypes';
 import { UserDeleteResponse } from 'hybrid-types/MessageTypes';
-import CustomError from '@/app/classes/CustomError';
+import CustomError from '@/classes/CustomError';
 
 const getUserById = async (id: number): Promise<UserWithNoPassword> => {
   const [rows] = await promisePool.execute<
@@ -45,7 +45,9 @@ const getUserByEmail = async (email: string): Promise<UserWithLevel> => {
   return rows[0];
 };
 
-const getUserByUsername = async (username: string): Promise<UserWithLevel> => {
+const getUserByUsername = async (
+  username: string,
+): Promise<UserWithLevel | null> => {
   const [rows] = await promisePool.execute<RowDataPacket[] & UserWithLevel[]>(
     `SELECT Users.user_id, Users.username, Users.password, Users.email, Users.created_at, UserLevels.level_name
      FROM Users
@@ -54,7 +56,7 @@ const getUserByUsername = async (username: string): Promise<UserWithLevel> => {
     [username],
   );
   if (rows.length === 0) {
-    throw new CustomError('User not found', 404);
+    return null;
   }
   return rows[0];
 };

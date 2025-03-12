@@ -1,69 +1,59 @@
-import { redirect } from 'next/navigation';
-import { login, logout } from '@/lib/authActions';
+// src/app/login/page.tsx
+'use client';
 
-export default async function Login() {
+import { useState } from 'react';
+import { login } from '@/lib/authActions';
+import { useRouter } from 'next/navigation';
+
+export default function Login() {
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      await login(formData);
+      router.push('/'); // Giriş başarılıysa anasayfaya yönlendir
+    } catch (err) {
+      setError((err as Error).message || 'Giriş başarısız');
+    }
+  };
+
   return (
-    <section>
-      <div className="flex flex-col p-8">
-        <form
-          action={async (formData) => {
-            'use server';
-            await login(formData);
-            redirect('/');
-          }}
-        >
-          <div className="mb-4">
-            <label
-              htmlFor="username"
-              className="block text-gray-700 text-sm font-bold mb-2"
-            >
-              Username
-            </label>
-            <input
-              type="text"
-              name="username"
-              id="username"
-              placeholder="Username"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            />
-          </div>
-          <div className="mb-4">
-            <label
-              htmlFor="password"
-              className="block text-gray-700 text-sm font-bold mb-2"
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              id="password"
-              placeholder="Password"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            Login
-          </button>
-        </form>
-        <form
-          action={async () => {
-            'use server';
-            await logout();
-            // redirect('/');
-          }}
-        >
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            Logout
-          </button>
-        </form>
-      </div>
-    </section>
+    <main className="flex flex-col items-center p-8">
+      <h1 className="text-4xl font-bold mb-4">Giriş Yap</h1>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-1/3">
+        <div>
+          <label htmlFor="username" className="block text-sm font-bold mb-2">
+            Kullanıcı Adı
+          </label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            className="shadow border rounded w-full py-2 px-3"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="block text-sm font-bold mb-2">
+            Şifre
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            className="shadow border rounded w-full py-2 px-3"
+            required
+          />
+        </div>
+        {error && <p className="text-red-500">{error}</p>}
+        <button type="submit" className="bg-blue-500 text-white py-2 px-4 rounded">
+          Giriş Yap
+        </button>
+      </form>
+    </main>
   );
 }

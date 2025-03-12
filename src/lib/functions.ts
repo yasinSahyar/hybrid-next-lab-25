@@ -1,20 +1,20 @@
-import { ErrorResponse } from 'hybrid-types/MessageTypes';
 
+
+// src/lib/functions.ts
 const fetchData = async <T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> => {
-  console.log('fetching data');
+  console.log('Veri alınıyor:', url);
   const response = await fetch(url, options);
-  const json = await response.json();
+
   if (!response.ok) {
-    const errorJson = json as unknown as ErrorResponse;
-    console.log('errorJson', errorJson);
-    if (errorJson.message) {
-      throw new Error(errorJson.message);
-    }
-    throw new Error(`Error ${response.status} occured`);
+    const text = await response.text(); // Ham yanıtı al
+    console.log('Hata yanıtı:', text);
+    throw new Error(`Hata ${response.status}: ${text}`);
   }
+
+  const json = await response.json();
   return json;
 };
 

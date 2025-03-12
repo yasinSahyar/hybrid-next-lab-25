@@ -1,13 +1,10 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
-  images: {
-    remotePatterns: [
-      {
-        hostname: 'media2.edu.metropolia.fi',
-      },
-    ],
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.externals = {
+      ...config.externals,
+      'mysql2': 'commonjs mysql2',
+    };
+    return config;
   },
 };
-
-export default nextConfig;

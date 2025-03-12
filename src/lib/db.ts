@@ -1,35 +1,14 @@
+// src/lib/db.ts
 import mysql from 'mysql2/promise';
 
-const promisePool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASS || 'Dimayman1',
+  database: process.env.DB_NAME || 'shopping_story',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  // Convert JSON fields to objects
-  typeCast: function (field, next) {
-    // Check for both string 'JSON' and MySQL type code 245
-    if (field.name === 'screenshots') {
-      const fieldValue = field.string('utf-8');
-      if (fieldValue) {
-        try {
-          return JSON.parse(fieldValue);
-        } catch (error) {
-          console.error('Failed to parse JSON field:', {
-            error: (error as Error).message,
-            field: field.name,
-            table: field.table,
-            value: fieldValue,
-          });
-          return null;
-        }
-      }
-      return next();
-    }
-    return next();
-  },
 });
 
-export default promisePool;
+export default pool;

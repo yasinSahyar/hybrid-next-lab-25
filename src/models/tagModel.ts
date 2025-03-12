@@ -1,3 +1,4 @@
+// src/models/tagModel.ts
 import { ERROR_MESSAGES } from '@/utils/errorMessages';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { MediaItem, Tag, TagResult } from 'hybrid-types/DBTypes';
@@ -5,7 +6,8 @@ import promisePool from '@/lib/db';
 import { MessageResponse } from 'hybrid-types/MessageTypes';
 import CustomError from '@/classes/CustomError';
 
-const uploadPath = process.env.UPLOAD_URL;
+const uploadPath = process.env.UPLOAD_URL || 'http://localhost:3000/uploads/';
+
 const BASE_MEDIA_QUERY = `
   SELECT
     MediaItems.media_id,
@@ -16,212 +18,70 @@ const BASE_MEDIA_QUERY = `
     title,
     description,
     created_at,
-    CONCAT(base_url, filename) AS filename,
+    CONCAT(?, filename) AS filename,
     CASE
       WHEN media_type LIKE '%image%'
-      THEN CONCAT(base_url, filename, '-thumb.png')
-      ELSE CONCAT(base_url, filename, '-animation.gif')
+      THEN CONCAT(?, filename, '-thumb.png')
+      ELSE CONCAT(?, filename, '-animation.gif')
     END AS thumbnail,
     CASE
       WHEN media_type NOT LIKE '%image%'
       THEN (
         SELECT JSON_ARRAY(
-          CONCAT(base_url, filename, '-thumb-1.png'),
-          CONCAT(base_url, filename, '-thumb-2.png'),
-          CONCAT(base_url, filename, '-thumb-3.png'),
-          CONCAT(base_url, filename, '-thumb-4.png'),
-          CONCAT(base_url, filename, '-thumb-5.png')
+          CONCAT(?, filename, '-thumb-1.png'),
+          CONCAT(?, filename, '-thumb-2.png'),
+          CONCAT(?, filename, '-thumb-3.png'),
+          CONCAT(?, filename, '-thumb-4.png'),
+          CONCAT(?, filename, '-thumb-5.png')
         )
       )
       ELSE NULL
     END AS screenshots
   FROM MediaItems
+  LEFT JOIN MediaItemTags ON MediaItems.media_id = MediaItemTags.media_id
+  LEFT JOIN Tags ON MediaItemTags.tag_id = Tags.tag_id
 `;
 
-// Request a list of tags
-const fetchAllTags = async (): Promise<Tag[]> => {
-  const [rows] = await promisePool.execute<RowDataPacket[] & Tag[]>(
-    'SELECT * FROM Tags',
-  );
-  return rows;
-};
-
-const fetchFilesByTagById = async (tag_id: number): Promise<MediaItem[]> => {
-  const [rows] = await promisePool.execute<RowDataPacket[] & MediaItem[]>(
-    `${BASE_MEDIA_QUERY}
-     JOIN MediaItemTags ON MediaItems.media_id = MediaItemTags.media_id
-     CROSS JOIN (SELECT ? AS base_url) AS vars
-     WHERE MediaItemTags.tag_id = ?`,
-    [uploadPath, tag_id],
-  );
-  return rows;
-};
-
-const fetchMediaByTagName = async (tag_name: string): Promise<MediaItem[]> => {
-  const prepare = promisePool.format(
-    `${BASE_MEDIA_QUERY}
-      JOIN MediaItemTags ON MediaItems.media_id = MediaItemTags.media_id
-      JOIN Tags ON MediaItemTags.tag_id = Tags.tag_id
-     CROSS JOIN (SELECT ? AS base_url) AS vars
-      WHERE Tags.tag_name = ?`,
-    [uploadPath, tag_name],
-  );
-  console.log('prepare', prepare);
-
-  const [rows] = await promisePool.execute<RowDataPacket[] & MediaItem[]>(
-    prepare,
-  );
-  return rows;
-};
-
-// Post a new tag
-const postTag = async (
-  tag_name: string,
-  media_id: number,
-): Promise<MessageResponse> => {
-  let tag_id = 0;
-  // check if tag exists (case insensitive)
-  const [tagResult] = await promisePool.query<RowDataPacket[] & Tag[]>(
-    'SELECT tag_id FROM Tags WHERE tag_name = ?',
-    [tag_name],
-  );
-
-  if (tagResult.length === 0) {
-    // if tag does not exist create it
-    const [insertResult] = await promisePool.execute<ResultSetHeader>(
-      'INSERT INTO Tags (tag_name) VALUES (?)',
-      [tag_name],
-    );
-    tag_id = insertResult.insertId;
-  } else {
-    tag_id = tagResult[0].tag_id;
-  }
-
-  const [result] = await promisePool.execute<ResultSetHeader>(
-    'INSERT INTO MediaItemTags (tag_id, media_id) VALUES (?, ?)',
-    [tag_id, media_id],
-  );
-
-  if (result.affectedRows === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_CREATED, 500);
-  }
-
-  return { message: 'Tag added' };
-};
-
-// Request a list of tags by media item id
-const fetchTagsByMediaId = async (id: number): Promise<TagResult[]> => {
-  const [rows] = await promisePool.execute<RowDataPacket[] & TagResult[]>(
-    `SELECT Tags.tag_id, Tags.tag_name, MediaItemTags.media_id
-     FROM Tags
-     JOIN MediaItemTags ON Tags.tag_id = MediaItemTags.tag_id
-     WHERE MediaItemTags.media_id = ?`,
-    [id],
-  );
-  return rows;
-};
-
-// Delete a tag
-const deleteTag = async (id: number): Promise<MessageResponse> => {
-  const connection = await promisePool.getConnection();
-  await connection.beginTransaction();
-
+export async function fetchMediaByTagName(tagName: string): Promise<MediaItem[] | null> {
   try {
-    const [result1] = await connection.execute<ResultSetHeader>(
-      'DELETE FROM MediaItemTags WHERE tag_id = ?',
-      [id],
+    const [rows] = await promisePool.execute<RowDataPacket[]>(
+      `${BASE_MEDIA_QUERY} WHERE Tags.tag_name = ?`,
+      [uploadPath, uploadPath, uploadPath, uploadPath, uploadPath, uploadPath, uploadPath, uploadPath, tagName]
     );
+    if (!rows.length) return null;
 
-    const [result2] = await connection.execute<ResultSetHeader>(
-      'DELETE FROM Tags WHERE tag_id = ?',
-      [id],
-    );
+    const mediaItems: MediaItem[] = rows.map((row) => ({
+      media_id: row.media_id,
+      user_id: row.user_id,
+      filename: row.filename,
+      filesize: row.filesize,
+      media_type: row.media_type,
+      title: row.title,
+      description: row.description,
+      created_at: row.created_at,
+      thumbnail: row.thumbnail,
+      screenshots: row.screenshots ? JSON.parse(row.screenshots) : null,
+    }));
 
-    if (result1.affectedRows === 0 && result2.affectedRows === 0) {
-      throw new CustomError(ERROR_MESSAGES.TAG.NOT_DELETED, 404);
-    }
-
-    await connection.commit();
-    return { message: 'Tag deleted' };
+    return mediaItems;
   } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
+    console.error('Error fetching media by tag:', (error as Error).message);
+    throw new CustomError(ERROR_MESSAGES.INTERNAL_SERVER_ERROR, 500);
   }
-};
+}
 
-const deleteTagFromMedia = async (
-  tag_name: string,
-  media_id: number,
-  user_id: number,
-): Promise<MessageResponse> => {
-  // check if user owns media item
-  const [mediaItem] = await promisePool.execute<RowDataPacket[]>(
-    'SELECT * FROM MediaItems WHERE media_id = ? AND user_id = ?',
-    [media_id, user_id],
-  );
-
-  if (mediaItem.length === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_AUTHORIZED, 401);
+export async function fetchTagsByMediaId(mediaId: number): Promise<Tag[]> {
+  try {
+    const [rows] = await promisePool.execute<RowDataPacket[]>(
+      `SELECT Tags.tag_id, Tags.tag_name 
+       FROM Tags 
+       JOIN MediaItemTags ON Tags.tag_id = MediaItemTags.tag_id 
+       WHERE MediaItemTags.media_id = ?`,
+      [mediaId]
+    );
+    return rows as Tag[];
+  } catch (error) {
+    console.error('Error fetching tags by media ID:', (error as Error).message);
+    throw new CustomError(ERROR_MESSAGES.INTERNAL_SERVER_ERROR, 500);
   }
-
-  // get tag id by tag name
-  const [tag] = await promisePool.execute<RowDataPacket[] & Tag[]>(
-    'SELECT tag_id FROM Tags WHERE tag_name = ?',
-    [tag_name],
-  );
-
-  if (tag.length === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_FOUND, 404);
-  }
-
-  const [result] = await promisePool.execute<ResultSetHeader>(
-    'DELETE FROM MediaItemTags WHERE tag_id = ? AND media_id = ?',
-    [tag[0].tag_id, media_id],
-  );
-
-  if (result.affectedRows === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_DELETED, 404);
-  }
-
-  return { message: 'Tag deleted from media item' };
-};
-
-const deleteTagFromMediaById = async (
-  tag_id: number,
-  media_id: number,
-  user_id: number,
-): Promise<MessageResponse> => {
-  // check if user owns media item
-  const [mediaItem] = await promisePool.execute<RowDataPacket[]>(
-    'SELECT * FROM MediaItems WHERE media_id = ? AND user_id = ?',
-    [media_id, user_id],
-  );
-
-  if (mediaItem.length === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_AUTHORIZED, 401);
-  }
-
-  const [result] = await promisePool.execute<ResultSetHeader>(
-    'DELETE FROM MediaItemTags WHERE tag_id = ? AND media_id = ?',
-    [tag_id, media_id],
-  );
-
-  if (result.affectedRows === 0) {
-    throw new CustomError(ERROR_MESSAGES.TAG.NOT_DELETED, 404);
-  }
-
-  return { message: 'Tag deleted from media item' };
-};
-
-export {
-  fetchAllTags,
-  postTag,
-  fetchTagsByMediaId,
-  fetchFilesByTagById,
-  deleteTag,
-  deleteTagFromMedia,
-  deleteTagFromMediaById,
-  fetchMediaByTagName,
-};
+}

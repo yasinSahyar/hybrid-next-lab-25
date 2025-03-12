@@ -1,14 +1,14 @@
-// src/app/upload/page.tsx
+import MediaForm from '@/components/MediaForm';
 import { requireAuth } from '@/lib/authActions';
-import UploadForm from './UploadForm';
 
-export default async function Upload() {
+const Upload = async () => {
   await requireAuth();
-  console.log('Kullanıcı doğrulandı, Yükleme sayfası render ediliyor');
   return (
     <main>
-      <h1 className="text-4xl font-bold">Yükleme</h1>
-      <UploadForm />
+      <h1 className="text-4xl font-bold">Upload</h1>
+      <MediaForm />
     </main>
   );
-}
+};
+
+export default Upload;
